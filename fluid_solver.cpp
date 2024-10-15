@@ -55,7 +55,7 @@ void set_bnd(int M, int N, int O, int b, float *x) {
 
 // Linear solve for implicit methods (diffusion)
 void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c) {
-  int tile_size = 32; // Tamanho do bloco para a técnica de bloqueamento
+  int tile_size = 16; // Tamanho do bloco para a técnica de bloqueamento
   
   for (int l = 0; l < LINEARSOLVERTIMES; l++) {
     for (int kk = 1; kk <= O; kk += tile_size) {
