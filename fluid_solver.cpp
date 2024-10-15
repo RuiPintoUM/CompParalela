@@ -54,38 +54,17 @@ void set_bnd(int M, int N, int O, int b, float *x) {
 }
 
 // Linear solve for implicit methods (diffusion)
-void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c) {
-  int tile_size = 16; // Tamanho do bloco para a técnica de bloqueamento
-  
+void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a,
+               float c) {
   for (int l = 0; l < LINEARSOLVERTIMES; l++) {
-    for (int kk = 1; kk <= O; kk += tile_size) {
-      for (int jj = 1; jj <= N; jj += tile_size) {
-        for (int ii = 1; ii <= M; ii += tile_size) {
-          // Processar os blocos de `tile_size x tile_size x tile_size`
-          for (int k = kk; k < std::min(kk + tile_size, O); k++) {
-            for (int j = jj; j < std::min(jj + tile_size, N); j++) {
-              for (int i = ii; i < std::min(ii + tile_size, M); i++) {
-                int index = IX(i, j, k);
-                int index_xm = IX(i - 1, j, k);
-                int index_xp = IX(i + 1, j, k);
-                int index_ym = IX(i, j - 1, k);
-                int index_yp = IX(i, j + 1, k);
-                int index_zm = IX(i, j, k - 1);
-                int index_zp = IX(i, j, k + 1);
-
-                // Reuso de valores temporários para minimizar os acessos à memória
-                float xm = x[index_xm];
-                float xp = x[index_xp];
-                float ym = x[index_ym];
-                float yp = x[index_yp];
-                float zm = x[index_zm];
-                float zp = x[index_zp];
-
-                // Atualizar o valor de x usando os vizinhos armazenados
-                x[index] = (x0[index] + a * (xm + xp + ym + yp + zm + zp)) / c;
-              }
-            }
-          }
+     for (int k = 1; k <= O; k++) {
+      for (int j = 1; j <= N; j++) {
+       for (int i = 1; i <= M; i++) {
+          x[IX(i, j, k)] = (x0[IX(i, j, k)] +
+                            a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
+                                 x[IX(i, j - 1, k)] + x[IX(i, j + 1, k)] +
+                                 x[IX(i, j, k - 1)] + x[IX(i, j, k + 1)])) /
+                           c;
         }
       }
     }
