@@ -80,23 +80,23 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
   for (int l = 0; l < LINEARSOLVERTIMES; l++) {
     // Iterate over tiles in the k, j, i directions
     for (int bk = 1; bk <= O; bk += TILE_SIZE) {
+      int bk_min = (bk + TILE_SIZE < O + 1) ? bk + TILE_SIZE : O + 1;
+      
       for (int bj = 1; bj <= N; bj += TILE_SIZE) {
+        int bj_min = (bj + TILE_SIZE < N + 1) ? bj + TILE_SIZE : N + 1;
+        
         for (int bi = 1; bi <= M; bi += TILE_SIZE) {
+          int bi_min = (bi + TILE_SIZE < M + 1) ? bi + TILE_SIZE : M + 1;
+          
           // Iterate over elements within each tile
-          for (int k = bk; k < std::min(bk + TILE_SIZE, O + 1); k++) {
-            for (int j = bj; j < std::min(bj + TILE_SIZE, N + 1); j++) {
-              for (int i = bi; i < std::min(bi + TILE_SIZE, M + 1); i++) {
-                // Compute the new value for x based on neighbors and x0
-                float newValue = x0[IX(i, j, k)];
-                newValue += a * (
-                  x[IX(i - 1, j, k)] + 
-                  x[IX(i + 1, j, k)] + 
-                  x[IX(i, j - 1, k)] + 
-                  x[IX(i, j + 1, k)] + 
-                  x[IX(i, j, k - 1)] + 
-                  x[IX(i, j, k + 1)]
-                );
-                x[IX(i, j, k)] = newValue / c;
+          for (int k = bk; k < bk_min; k++) {
+            for (int j = bj; j < bj_min; j++) {
+              for (int i = bi; i < bi_min; i++) {
+                x[IX(i, j, k)] = (x0[IX(i, j, k)] +
+                                  a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
+                                      x[IX(i, j - 1, k)] + x[IX(i, j + 1, k)] +
+                                      x[IX(i, j, k - 1)] + x[IX(i, j, k + 1)])) /
+                                c;
               }
             }
           }
@@ -107,6 +107,7 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
     set_bnd(M, N, O, b, x);
   }
 }
+
 
 // Diffusion step (uses implicit method)
 void diffuse(int M, int N, int O, int b, float *x, float *x0, float diff,
@@ -122,9 +123,9 @@ void advect(int M, int N, int O, int b, float *d, float *d0, float *u, float *v,
             float *w, float dt) {
   float dtX = dt * M, dtY = dt * N, dtZ = dt * O;
 
-  for (int i = 1; i <= M; i++) {
+  for (int k = 1; k <= O; k++) {
     for (int j = 1; j <= N; j++) {
-      for (int k = 1; k <= O; k++) {
+      for (int i = 1; i <= M; i++) {
         float x = i - dtX * u[IX(i, j, k)];
         float y = j - dtY * v[IX(i, j, k)];
         float z = k - dtZ * w[IX(i, j, k)];
@@ -198,16 +199,22 @@ void project(int M, int N, int O, float *u, float *v, float *w, float *p,
 }
 */
 void project(int M, int N, int O, float *u, float *v, float *w, float *p, float *div) {
-  float halfInvMaxDim = 0.5f / MAX(M, MAX(N, O)); // Precompute this value
+  float halfInvMaxDim = 0.5f / (M > N ? (M > O ? M : O) : (N > O ? N : O));
 
   // Tiled loop for better cache locality
   for (int k0 = 1; k0 <= O; k0 += TILE_SIZE) {
+    int k0_min = (k0 + TILE_SIZE < O + 1) ? k0 + TILE_SIZE : O + 1;
+    
     for (int j0 = 1; j0 <= N; j0 += TILE_SIZE) {
+      int j0_min = (j0 + TILE_SIZE < N + 1) ? j0 + TILE_SIZE : N + 1;
+      
       for (int i0 = 1; i0 <= M; i0 += TILE_SIZE) {
+        int i0_min = (i0 + TILE_SIZE < M + 1) ? i0 + TILE_SIZE : M + 1;
+
         // Process each tile/block
-        for (int k = k0; k < std::min(k0 + TILE_SIZE, O + 1); k++) {
-          for (int j = j0; j < std::min(j0 + TILE_SIZE, N + 1); j++) {
-            for (int i = i0; i < std::min(i0 + TILE_SIZE, M + 1); i++) {
+        for (int k = k0; k < k0_min; k++) {
+          for (int j = j0; j < j0_min; j++) {
+            for (int i = i0; i < i0_min; i++) {
               div[IX(i, j, k)] =
                   -halfInvMaxDim * (u[IX(i + 1, j, k)] - u[IX(i - 1, j, k)] +
                                     v[IX(i, j + 1, k)] - v[IX(i, j - 1, k)] +
@@ -229,11 +236,17 @@ void project(int M, int N, int O, float *u, float *v, float *w, float *p, float 
 
   // Adjust velocities
   for (int k0 = 1; k0 <= O; k0 += TILE_SIZE) {
+    int k0_min = (k0 + TILE_SIZE < O + 1) ? k0 + TILE_SIZE : O + 1;
+    
     for (int j0 = 1; j0 <= N; j0 += TILE_SIZE) {
+      int j0_min = (j0 + TILE_SIZE < N + 1) ? j0 + TILE_SIZE : N + 1;
+      
       for (int i0 = 1; i0 <= M; i0 += TILE_SIZE) {
-        for (int k = k0; k < std::min(k0 + TILE_SIZE, O + 1); k++) {
-          for (int j = j0; j < std::min(j0 + TILE_SIZE, N + 1); j++) {
-            for (int i = i0; i < std::min(i0 + TILE_SIZE, M + 1); i++) {
+        int i0_min = (i0 + TILE_SIZE < M + 1) ? i0 + TILE_SIZE : M + 1;
+
+        for (int k = k0; k < k0_min; k++) {
+          for (int j = j0; j < j0_min; j++) {
+            for (int i = i0; i < i0_min; i++) {
               u[IX(i, j, k)] -= 0.5f * (p[IX(i + 1, j, k)] - p[IX(i - 1, j, k)]);
               v[IX(i, j, k)] -= 0.5f * (p[IX(i, j + 1, k)] - p[IX(i, j - 1, k)]);
               w[IX(i, j, k)] -= 0.5f * (p[IX(i, j, k + 1)] - p[IX(i, j, k - 1)]);
@@ -249,6 +262,7 @@ void project(int M, int N, int O, float *u, float *v, float *w, float *p, float 
   set_bnd(M, N, O, 2, v);
   set_bnd(M, N, O, 3, w);
 }
+
 
 
 // Step function for density
