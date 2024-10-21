@@ -11,7 +11,7 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define LINEARSOLVERTIMES 20
 
-#define TILE_SIZE 24 
+#define TILE_SIZE 6
 
 // Add sources (density or velocity)
 void add_source(int M, int N, int O, float *x, float *s, float dt) {
@@ -54,32 +54,14 @@ void set_bnd(int M, int N, int O, int b, float *x) {
   x[IX(M + 1, N + 1, 0)] = 0.33f * (x[IX(M, N + 1, 0)] + x[IX(M + 1, N, 0)] +
                                     x[IX(M + 1, N + 1, 1)]);
 }
-/*
-// Linear solve for implicit methods (diffusion)
-// Mudei a ordem dos ciclos (performace)
-void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a,
-               float c) {
-  for (int l = 0; l < LINEARSOLVERTIMES; l++) {
-    for (int k = 1; k <= O; k++) {
-      for (int j = 1; j <= N; j++) {
-        for (int i = 1; i <= M; i++) {
-          x[IX(i, j, k)] = (x0[IX(i, j, k)] +
-                            a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
-                                 x[IX(i, j - 1, k)] + x[IX(i, j + 1, k)] +
-                                 x[IX(i, j, k - 1)] + x[IX(i, j, k + 1)])) /
-                           c;
-        }
-      }
-    }
-    set_bnd(M, N, O, b, x);
-  }
-}
-*/
+
+
 void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c) {
+  float new_c = 1 / c;
   // Loop over linear solve steps
   for (int l = 0; l < LINEARSOLVERTIMES; l++) {
     // Iterate over tiles in the k, j, i directions
-    for (int bk = 1; bk <= O; bk += TILE_SIZE) {
+    for (int bk = 1; bk <= O; bk += TILE_SIZE) {  
       int bk_min = (bk + TILE_SIZE < O + 1) ? bk + TILE_SIZE : O + 1;
       
       for (int bj = 1; bj <= N; bj += TILE_SIZE) {
@@ -95,8 +77,7 @@ void lin_solve(int M, int N, int O, int b, float *x, float *x0, float a, float c
                 x[IX(i, j, k)] = (x0[IX(i, j, k)] +
                                   a * (x[IX(i - 1, j, k)] + x[IX(i + 1, j, k)] +
                                       x[IX(i, j - 1, k)] + x[IX(i, j + 1, k)] +
-                                      x[IX(i, j, k - 1)] + x[IX(i, j, k + 1)])) /
-                                c;
+                                      x[IX(i, j, k - 1)] + x[IX(i, j, k + 1)])) * new_c;
               }
             }
           }
@@ -162,42 +143,8 @@ void advect(int M, int N, int O, int b, float *d, float *d0, float *u, float *v,
   }
   set_bnd(M, N, O, b, d);
 }
-/*
-// Projection step to ensure incompressibility (make the velocity field
-// divergence-free)
-void project(int M, int N, int O, float *u, float *v, float *w, float *p,
-             float *div) {
-  for (int k = 1; k <= O; k++) {
-    for (int j = 1; j <= N; j++) {
-      for (int i = 1; i <= M; i++) {
-        div[IX(i, j, k)] =
-            -0.5f *
-            (u[IX(i + 1, j, k)] - u[IX(i - 1, j, k)] + v[IX(i, j + 1, k)] -
-             v[IX(i, j - 1, k)] + w[IX(i, j, k + 1)] - w[IX(i, j, k - 1)]) /
-            MAX(M, MAX(N, O));
-        p[IX(i, j, k)] = 0;// Calcular c antes para clareza
-      }
-    }
-  }
 
-  set_bnd(M, N, O, 0, div);
-  set_bnd(M, N, O, 0, p);
-  lin_solve(M, N, O, 0, p, div, 1, 6);
 
-  for (int i = 1; i <= M; i++) {
-    for (int j = 1; j <= N; j++) {
-      for (int k = 1; k <= O; k++) {
-        u[IX(i, j, k)] -= 0.5f * (p[IX(i + 1, j, k)] - p[IX(i - 1, j, k)]);
-        v[IX(i, j, k)] -= 0.5f * (p[IX(i, j + 1, k)] - p[IX(i, j - 1, k)]);
-        w[IX(i, j, k)] -= 0.5f * (p[IX(i, j, k + 1)] - p[IX(i, j, k - 1)]);
-      }
-    }
-  }
-  set_bnd(M, N, O, 1, u);
-  set_bnd(M, N, O, 2, v);
-  set_bnd(M, N, O, 3, w);
-}
-*/
 void project(int M, int N, int O, float *u, float *v, float *w, float *p, float *div) {
   float halfInvMaxDim = 0.5f / (M > N ? (M > O ? M : O) : (N > O ? N : O));
 
@@ -262,8 +209,6 @@ void project(int M, int N, int O, float *u, float *v, float *w, float *p, float 
   set_bnd(M, N, O, 2, v);
   set_bnd(M, N, O, 3, w);
 }
-
-
 
 // Step function for density
 void dens_step(int M, int N, int O, float *x, float *x0, float *u, float *v,
